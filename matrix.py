@@ -6,6 +6,7 @@ from argparse import ArgumentParser
 from collections import defaultdict
 import shutil
 import datetime
+from jinja2 import Environment, FileSystemLoader, Template, select_autoescape
 
 node_names = [
     'aliquot',
@@ -22,7 +23,6 @@ node_names = [
     'slide_image',
     'slide_count'
 ]
-
 
 main_header_order = [
     'project',
@@ -43,6 +43,7 @@ main_header_order = [
     'formats_not_supported',
     'validated'
 ]
+
 header_strings = {
     'organization': 'Organization',
     'project': 'Project',
@@ -444,6 +445,89 @@ def output_detailed_matrix_table(data, file_name):
         out_file.write('Last processed: %s UTC\n' % datetime.datetime.today().isoformat())
         out_file.write('</body></html>\n')
 
+def output_main_matrix_table_jinja(data, file_name):
+    env = Environment(
+        loader = FileSystemLoader('templates'),
+    )
+    main_matrix_template = env.get_template('matrix1_template.html')
+    template_args = {}
+    template_args['page_title'] = 'Blood Profiling Atlas Project Data Matrix - Submitted Data Counts'
+    template_args['main_header_1'] = 'Blood Profiling Atlas Project Data Matrix'
+    template_args['main_header_2'] = 'Submitted Data Counts'
+    table_body = ''
+    header_order = None
+    totals = defaultdict(int)
+    for key in sorted(data.keys()):
+        value = data[key]
+        if not header_order:
+            header_order = list(main_header_order)
+            table_body += ('<thead>\n')
+            table_body += ('<th class="organization">%s</th>' % header_strings['organization'])
+            for header_val in header_order:
+                table_body += ('<th>%s</th>' % header_strings[header_val])
+            table_body += ('</thead>\n')
+        table_body += ('<tr>\n')
+        org_data = parse_org_project(data[key])
+        table_body += ('<th>%s</th>\n' % ' '.join(key.replace('_', ' ').split()[1:2]))
+        for header_val in header_order:
+            if header_val in data[key].keys():
+                val2 = data[key][header_val]
+                if header_val == validated_key:
+                    table_body += ('<td>%r</td>\n' % val2)
+                    if val2:
+                        totals[header_val] += 1
+                else:
+                    if val2:
+                        if header_val != 'project':
+                            table_body += ('<td>%d</td>\n' % len(val2))
+                        else:
+                            table_body += ('<td>%s</td>\n' % org_data['project'])
+                            
+                        totals[header_val] += len(val2)
+                    else:
+                        table_body += ('<td>--</td>\n')
+            else:
+                #print "%s not in data" % header_val
+                #print data.keys()
+                if header_val == 'format_not_supported':
+                    table_body += ('<td>N/A</td>\n')
+                else:
+                    table_body += ('<td>--</td>\n' )
+
+        table_body += ('</tr>\n')
+        
+    # write the hard coded XML folks
+    for org, val in hardcoded_orgs.iteritems():
+        table_body += ('<tr>\n')
+        table_body += ('<th>%s</th>\n' % org)
+        for header_val in header_order:
+            if header_val == 'formats_not_supported':
+                table_body += ('<td>%s</td>\n' % val)
+            elif header_val == validated_key:
+                table_body += ('<td>False</td>\n')
+            else:
+                table_body += ('<td>--</td>\n')
+
+        table_body += ('</tr>\n')
+
+    table_body += ('<tfoot>\n')
+    table_body += ('<th>TOTALS</th>\n')
+    for header_val in header_order:
+        if header_val in no_total_columns:
+            table_body += ('<td>N/A</td>\n')
+        else:
+            if header_val in totals:
+                val = totals[header_val]
+            else:
+                val = 0
+            table_body += ('<td>%d</td>\n' % val)
+    table_body += ('</tfoot>\n')
+    template_args['table_body'] = table_body
+    template_args['last_processed'] = datetime.datetime.now().isoformat()
+    rendered_matrix = main_matrix_template.render(**template_args)
+    with open(file_name, 'w') as out_file:
+        out_file.write(rendered_matrix)
+
 def output_main_matrix_table(data, file_name):
     print '***Writing HTML out***'
     with open(file_name, 'w') as out_file:
@@ -637,6 +721,8 @@ def print_dict(cur_dict):
 s3_inst = S3_Wrapper()
 args = parse_cmd_args(s3_inst)
 
+
+
 object_store = os.environ['S3_OBJECT_STORE']
 bucket_name = os.environ['S3_BUCKET']
 
@@ -692,6 +778,8 @@ if not args.create_secondary_matrix:
     #for key in new_org_data[org_name].keys():
     #    if type(new_org_data[org_name][key]) != bool:
     #        print key, len(new_org_data[org_name][key])
+    output_main_matrix_table_jinja(new_org_data, matrix_file_name)
+    sys.exit()
     output_main_matrix_table(new_org_data, matrix_file_name)
     file_name = matrix_file_name
 else:
