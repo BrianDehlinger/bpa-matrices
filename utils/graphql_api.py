@@ -1,5 +1,6 @@
 from cdispyutils.hmac4 import get_auth
 import requests
+import time
 import json
 
 def get_api_auth(filename):
@@ -18,15 +19,26 @@ def query(query_txt, auth, variables=None):
    else:
       query = {'query': query_txt, 'variables': variables}    
 
-   output = requests.post('http://kubenode.internal.io:30004/v0/submission/graphql/', auth=auth, json=query).text
-   data = json.loads(output)  
+   #print query_txt
+   tries = 0
+   while tries < 1:
+      output = requests.post('http://kubenode.internal.io:30004/v0/submission/graphql/', auth=auth, json=query).text
+      data = json.loads(output)  
 
-   if 'errors' in data:
-      print data
+      if 'errors' in data:
+         print data
 
-   if not 'data' in data:
-      print query_txt
-      print data
+      if not 'data' in data:
+         print query_txt
+         print data
+      
+      else:
+         if not data['data']:
+            tries += 1
+            time.sleep(1)
+ 	    auth = get_api_auth('/home/ubuntu/.secrets')
+	 else:
+	    break            
 
    return data
 
@@ -44,18 +56,22 @@ def get_projects(auth, excluded=[]):
 
    return projects
 
-def count_experiments(project_id, auth, study_setup=None):
+def count_experiments(project_id, auth, study_setup=None, path="read_group"):
 
-   query_txt = """query Project {project (first:0, project_id: "%s") {   
-                                studies(first:0) {
-                                submitter_id study_setup}}}""" % (project_id)
+   if study_setup == None:
+      query_txt = """query Project {study(first:0, project_id:"%s") {   
+                                    submitter_id}}""" % (project_id)
+   else:
+      query_txt = """query Project {study(first:0, project_id:"%s", study_setup: "%s", with_path_to:{type: "%s"}) {     
+                                submitter_id}}""" % (project_id, study_setup, path)
+
+
    data = query(query_txt, auth) 
    counts = 0
    experiments = []
 
-   for study in data['data']['project'][0]['studies']:
-        if study_setup == None or study_setup == study['study_setup']:
-            counts += 1
-            experiments.append(study['submitter_id'])
+   for study in data['data']['study']:
+      counts += 1
+      experiments.append(study['submitter_id'])
    
    return counts, experiments   
