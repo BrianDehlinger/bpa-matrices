@@ -10,13 +10,11 @@ main_header_order = [
     'submitter_id',
     'study_design',
     'study_objective',
-#    'type_of_sample',
-#    'type_of_specimen', 
     'library_preparation_kit_name', 
     'barcoding_applied', 
     'instrument_model', 
     'is_paired_end', 
-    'read_length_lower', 
+    'read_length', 
     'target_capture_kit_name'
 ]
 
@@ -26,27 +24,37 @@ header_strings = {
     'submitter_id': 'Experiment ID',
     'study_design': 'Study Design',
     'study_objective': 'Study Objective',
-#    'type_of_sample': 'Type of Samples',
-#    'type_of_specimen': 'Type of Specimen',
     'library_preparation_kit_name': 'Library Preparation Method', 
     'barcoding_applied': 'Applied Barcoding?', 
-    'instrument_model': 'Sequencer Typer', 
+    'instrument_model': 'Sequencer Type', 
     'is_paired_end': 'Library Layout', 
-    'read_length_lower': 'Read Lengths', 
+    'read_length': 'Read Lengths', 
     'target_capture_kit_name': 'Target Capture Method'
+}
+
+multiple_fields = {
+    'read_length': ['read_length_lower', 'read_length_upper']
 }
 
 special_style = {
     'project': 'min-width:200px',
     'submitter_id': 'min-width:200px',
     'study_objective': 'min-width:200px',
+    'study_design': 'min-width:200px',
     'type_of_specimen': 'min-width:200px',    
-    'read_length_lower': 'min-width:100px' 
+    'read_length_lower': 'min-width:100px',
+    'library_preparation_kit_name': 'min-width:400px',
+    'instrument_model': 'min-width:200px',
+    'target_capture_kit_name': 'min-width:100px',
+    'is_paired_end': 'min-width:100px',
+    'read_length': 'min-width:100px'
 }
 
 not_validated_projects = ["internal-test"]
 
 def parse_cmd_args():
+    ''' Read arguments '''
+
     parser = ArgumentParser()
     parser.add_argument('--copy_file_to_server',
                         help='copies file to object store',
@@ -65,12 +73,13 @@ def parse_cmd_args():
 
 
 def read_group_query(project_id, experiment_id):
+   ''' Get Read Group properties through GraphQL queries '''
 
    data_dict = {'library_preparation_kit_name': [], 
                 'barcoding_applied': [], 
                 'instrument_model': [], 
                 'is_paired_end': [], 
-                'read_length_lower': [], 
+                'read_length': [], 
                 'target_capture_kit_name': []
    }
 
@@ -79,6 +88,7 @@ def read_group_query(project_id, experiment_id):
 
    data = graphql_api.query(query_txt, auth) 
 
+   row_keys = []
    for case in data['data']['study'][0]['cases']:
       query_txt = """query ReadGroups {case (first:0, project_id: "%s", submitter_id: "%s") {   
                                       biospecimens(first:0){
@@ -86,7 +96,7 @@ def read_group_query(project_id, experiment_id):
                                       aliquots(first:0){
                                       analytes(first:0){
                                       read_groups(first:0){
-                                      library_preparation_kit_name barcoding_applied instrument_model is_paired_end read_length_lower target_capture_kit_name}}}}}}}"""  % (project_id, case['submitter_id'])
+                                      library_preparation_kit_name barcoding_applied instrument_model is_paired_end read_length_lower read_length_upper target_capture_kit_name}}}}}}}"""  % (project_id, case['submitter_id'])
 
       case_data = graphql_api.query(query_txt, auth) 
 
@@ -97,20 +107,40 @@ def read_group_query(project_id, experiment_id):
                   for an in a['analytes']:
                     for rg in an['read_groups']:
                        if rg:
+                          row = {}
+                          row_key = ""
                           for key in data_dict:
-                              if rg[key] != None and not str(rg[key]) in data_dict[key]:
-                                 data_dict[key].append(str(rg[key]))
+                              if key in multiple_fields:
+                                 value = ""
+                                 if rg[multiple_fields[key][0]] != None:
+                                     value = str(rg[multiple_fields[key][0]])
+                                 if rg[multiple_fields[key][1]] != None and rg[multiple_fields[key][1]] != rg[multiple_fields[key][0]]:
+                                     value = value + '-' + str(rg[multiple_fields[key][1]])
+                                 row[key] = value
+                                 row_key += value
+                              elif rg[key] != None:
+                                 row[key] = str(rg[key])
+                                 row_key += str(rg[key])
 
-   if len(data_dict['is_paired_end'])==1:
-      if data_dict['is_paired_end'][0] == 'False':
-          data_dict['is_paired_end'] = 'Single-End'
+                          if row_key not in row_keys:
+                               row_keys.append(row_key)
+                               for key in row:
+                                   data_dict[key].append(row[key])
+
+   paired_ends =[]
+   for entry in data_dict['is_paired_end']:
+      if entry == 'False':
+          paired_ends.append('Single-End')
       else:
-          data_dict['is_paired_end'] = 'Paired-End'         
-
+          paired_ends.append('Paired-End')         
+   
+   data_dict['is_paired_end'] = paired_ends
+   
    return data_dict
 
 
 def study_description(project_id, experiment_id, auth):
+   ''' Get study properties through GraphQL queries '''
 
    query_txt = """query Study {study (first:0, project_id: "%s", submitter_id: "%s") {   
                                    submitter_id study_design study_objective}}"""  % (project_id, experiment_id)
@@ -120,6 +150,8 @@ def study_description(project_id, experiment_id, auth):
 
 
 def output_results_table(data, org_counts, proj_counts, file_name):
+    ''' Format results in the output html '''
+
     print '***Writing HTML out***'
     with open(file_name, 'w') as out_file:
         out_file.write('<html>\n')
@@ -162,8 +194,9 @@ def output_results_table(data, org_counts, proj_counts, file_name):
                   if not line[key]:
                      line[key] = '--'
                   if isinstance(line[key], list) and not None in line[key]: 
-                     line[key] = ', '.join(line[key])  
-                  out_file.write('<td>%s</td>' % line[key])
+                     line[key] = '<br/>'.join(line[key])  
+                     for value in line[key]:
+                         out_file.write('<td>%s</td>' % line[key])
            out_file.write('</tr>\n') 
 
         out_file.write('</table></section></div></div></div>\n')
@@ -189,7 +222,7 @@ if __name__ == '__main__':
        if project in not_validated_projects: continue
 
        # Get and count studies per organization
-       exp_counts, experiments = graphql_api.count_experiments(project, auth, 'Genetic Analysis')
+       exp_counts, experiments = graphql_api.count_experiments(project, auth, 'Genetic Analysis', 'read_group')
        if org_name in counts_by_org:
           counts_by_org[org_name]+=exp_counts
        else:   
@@ -211,10 +244,12 @@ if __name__ == '__main__':
           data_exp.update(data_rg)          
           data.append(data_exp)
 
+    # Prepare output HTML
     file_name = args.output
     nginx_loc = '/usr/share/nginx/html/'
     output_results_table(data, counts_by_org, counts_by_proj, args.output)
 
+    # Copy results to server
     if args.copy_file_to_server:
         print "Copying %s to %s" % (file_name,
             nginx_loc + file_name)
