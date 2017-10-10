@@ -45,7 +45,7 @@ special_style = {
     'read_length_lower': 'min-width:100px',
     'library_preparation_kit_name': 'min-width:400px',
     'instrument_model': 'min-width:200px',
-    'target_capture_kit_name': 'min-width:100px',
+    'target_capture_kit_name': 'min-width:300px',
     'is_paired_end': 'min-width:100px',
     'read_length': 'min-width:100px'
 }
@@ -195,8 +195,7 @@ def output_results_table(data, org_counts, proj_counts, file_name):
                      line[key] = '--'
                   if isinstance(line[key], list) and not None in line[key]: 
                      line[key] = '<br/>'.join(line[key])  
-                     for value in line[key]:
-                         out_file.write('<td>%s</td>' % line[key])
+                  out_file.write('<td>%s</td>' % line[key])
            out_file.write('</tr>\n') 
 
         out_file.write('</table></section></div></div></div>\n')
