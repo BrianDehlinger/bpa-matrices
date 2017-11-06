@@ -44,13 +44,15 @@ special_style = {
     'type_of_specimen': 'min-width:200px',    
     'read_length_lower': 'min-width:100px',
     'library_preparation_kit_name': 'min-width:400px',
-    'instrument_model': 'min-width:200px',
+    'instrument_model': 'min-width:300px',
     'target_capture_kit_name': 'min-width:300px',
     'is_paired_end': 'min-width:100px',
     'read_length': 'min-width:100px'
 }
 
 not_validated_projects = ["internal-test"]
+
+step = 5
 
 def parse_cmd_args():
     ''' Read arguments '''
@@ -84,21 +86,34 @@ def read_group_query(project_id, experiment_id):
    }
 
    query_txt = """query Cases {study (first:0, project_id: "%s", submitter_id: "%s") {   
-                                    cases(first:0){submitter_id}}}"""% (project_id, experiment_id)
+                                    cases(first:0){submitter_id _biospecimens_count}}}"""% (project_id, experiment_id)
 
    data = graphql_api.query(query_txt, auth) 
 
    row_keys = []
    for case in data['data']['study'][0]['cases']:
-      query_txt = """query ReadGroups {case (first:0, project_id: "%s", submitter_id: "%s") {   
-                                      biospecimens(first:0){
-                                      samples(first:0){
-                                      aliquots(first:0){
-                                      analytes(first:0){
-                                      read_groups(first:0){
-                                      library_preparation_kit_name barcoding_applied instrument_model is_paired_end read_length_lower read_length_upper target_capture_kit_name}}}}}}}"""  % (project_id, case['submitter_id'])
 
-      case_data = graphql_api.query(query_txt, auth) 
+      counts = case['_biospecimens_count']
+      offset = 0
+
+      case_data = {}
+      while offset <= counts:
+
+          query_txt = """query ReadGroups {case (project_id: "%s", submitter_id: "%s") {   
+                                           biospecimens(first:%s, offset:%s){
+                                           samples(first:0){
+                                           aliquots(first:0){
+                                           analytes(first:0){
+                                           read_groups(first:0){
+                                           library_preparation_kit_name barcoding_applied instrument_model is_paired_end read_length_lower read_length_upper target_capture_kit_name}}}}}}}"""  % (project_id, case['submitter_id'], step, offset)
+
+          case_output = graphql_api.query(query_txt, auth) 
+
+          if not case_data:
+             case_data = case_output
+          else:
+             case_data['data']['case'][0]['biospecimens'] = case_data['data']['case'][0]['biospecimens'] + case_output['data']['case'][0]['biospecimens']
+          offset += step
 
       for c in case_data['data']['case']:
           for b in c['biospecimens']: 
