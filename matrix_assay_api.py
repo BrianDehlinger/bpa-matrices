@@ -112,7 +112,6 @@ def assay_queries(project_id, experiment_id):
                                     row_key += str(a[key])
 
                               if row_key not in row_keys:
-                                print assay + ' ' + row_key
                                 row_keys.append(row_key)
                                 for key in row:
                                     data_dict[key].append(row[key])
