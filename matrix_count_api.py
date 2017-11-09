@@ -118,7 +118,7 @@ count_fields = {
   'cell_image': '_cell_image_count',
   'mass_cytometry_image': '_mass_cytometry_image_count',
   'pcr_assay': '_pcr_assay_count',
-  'quantification_assay': '_pcr_assay_count',
+  'quantification_assay': '_quantification_assay_count',
   'mass_cytometry_assay': '_mass_cytometry_assay_count',
   'immunoassay': '_immunoassay_count',
   'sequencing_assay': '_sequencing_assay_count'
