@@ -121,7 +121,7 @@ def output_matrix_table(summaries, projects, file_name):
         out_file.write('<html>\n')
         out_file.write('<head>\n')
         out_file.write('<link rel="stylesheet" type="text/css" href="style.css">\n')
-        out_file.write('<title>BloodPAC - Validated Data Summary</title>\n')
+        out_file.write('<title>BloodPAC - MTDE Summary</title>\n')
         out_file.write('<link rel="shortcut icon" href="favicon.png" type="image/x-icon"/>\n')
         out_file.write('</head>\n')
         out_file.write('<body>\n')
@@ -131,7 +131,7 @@ def output_matrix_table(summaries, projects, file_name):
         out_file.write('<section class="grid__col--60 grid__col--push10" role="header" id="header">\n')
         out_file.write('<h1><img src="bpa-logo.png" height="64"></h1>\n')
         out_file.write('<h1>Minimum Technical Data Elements (MTDE)</h1>')  
-        out_file.write('<h2>Data Summary Matrices</h2>')               
+        out_file.write('<h2>MTDE Summary Matrices</h2>')               
         out_file.write('</section>\n')
 
         for su in mtde_headers:
@@ -151,7 +151,7 @@ def output_matrix_table(summaries, projects, file_name):
             else:
                 imagename = plot_fields(data, su, projects)                  
 
-            out_file.write('<a id="%s" href="#" onclick="showPlot(\'%s\',\'%s\',\'%s\')", class="showplot">View as a graph</a>' % (linkElement, divTable, divPlot, linkElement))
+            out_file.write('<a id="%s" href="#%s" onclick="showPlot(\'%s\',\'%s\',\'%s\')", class="showplot">View as a graph</a>' % (linkElement, su, divTable, divPlot, linkElement))
             out_file.write('<div id="%s", style="display:none">' % divPlot)
             out_file.write('<img src="%s" alt="Fractination Time" style="width:100vw;">' % imagename)
             out_file.write('</div>')
@@ -163,7 +163,7 @@ def output_matrix_table(summaries, projects, file_name):
             out_file.write('<th>Organization</th>')
             out_file.write('<th>Project</th>')
             for key in data:
-                out_file.write('<th>%s</th>' % cgi.escape(key.encode('utf-8')))
+                out_file.write('<th>%s</th>' % key.encode('utf-8'))
                 totals[key] = 0
             out_file.write('</tr>\n') 
             out_file.write('</thead>\n')
