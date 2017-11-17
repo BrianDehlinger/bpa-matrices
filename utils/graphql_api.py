@@ -26,7 +26,7 @@ def query(query_txt, auth, variables=None):
       data = json.loads(output)  
 
       if 'errors' in data:
-         print data
+         print data['errors']
 
       if not 'data' in data:
          print query_txt
