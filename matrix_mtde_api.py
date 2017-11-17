@@ -17,21 +17,31 @@ mtde_fields = {
     "blood_tube_type": "biospecimen",
     "shipping_temperature": "biospecimen",
     "composition": "sample",
-    "hours_to_fractionation": "sample",    
-    "clinical_or_contrived": "aliquot",    
+    "hours_to_fractionation": "sample",
+    "clinical_or_contrived": "aliquot",
     "hours_to_freezer": "aliquot",
     "storage_temperature": "aliquot",
     "analyte_isolation_method": "analyte",
-    "assay_method": "quantification_assay"  
-    #"assay_method": "assay_result"
-    # DNA Yield    
+    "assay_method": ["quantification_assay", "immunoassay", "mass_cytometry_assay", "pcr_assay", "sequencing_assay"]
+    #"molecular_concentration": "quantification_assay"
 }
 
 multiple_fields = {
     "hours_to_fractionation": ["hours_to_fractionation_lower", "hours_to_fractionation_upper"],     
     "hours_to_freezer": ["hours_to_freezer_lower", "hours_to_freezer_upper"],
     "shipping_temperature": ["shipping_temperature", "shipping_temperature"],
-    "storage_temperature": ["storage_temperature", "storage_temperature"]
+    "storage_temperature": ["storage_temperature", "storage_temperature"],
+    "molecular_concentration": ["molecular_concentration", "molecular_concentration"]
+}
+
+multiple_columns = {
+    "assay_method": {
+	"quantification_assay": "Quantification Assays",
+        "immunoassay": "Immunoassays",
+	"pcr_assay": "PCR Assays",
+	"sequencing_assay": "Sequencing Assays",
+	"mass_cytometry_assay": "Mass Cytometry Assays"
+    }
 }
 
 mtde_headers = {
@@ -43,9 +53,12 @@ mtde_headers = {
     "hours_to_freezer": "Time to Freezer",
     "storage_temperature": "Storage Temperature",
     "analyte_isolation_method": "Analyte Isolation Method",
-    "assay_method": "Quantification Method"  
-    #"assay_method": "Assay Methodology"
+    "quantification_assay": "Quantification Method",
+    "assay_method": "Assay Method"
+    #"molecular_concentration": "DNA Concentration"
 }
+
+other_choices = ['None', 'Unknown', 'Not Applicable']
 
 step = 10000
 
@@ -82,8 +95,12 @@ def query_mtde_field(node, f, projects, auth):
         offset = 0  
       
         data = {}
+        errors = {}
         while offset <= counts:
-           query_txt = """{ %s(first:%s, offset:%s, project_id: "%s") {%s}}""" % (node, step, offset, project, field)
+           if f == "molecular_concentration":
+               query_txt = """{ %s(first:%s, offset:%s, project_id: "%s", with_path_to: {type: "analyte", analyte_type: "DNA"}) {%s}}""" % (node, step, offset, project, field)
+           else:
+               query_txt = """{ %s(first:%s, offset:%s, project_id: "%s") {%s}}""" % (node, step, offset, project, field)
            output = graphql_api.query(query_txt, auth)
            if not data:
               data = output
@@ -91,8 +108,21 @@ def query_mtde_field(node, f, projects, auth):
               data['data'][node] = data['data'][node] + output['data'][node]
            offset += step
 
+           if 'errors' in data:
+               for e in other_choices:
+                   err_count = 0
+
+                   if f in multiple_fields:
+   	              err_count = len([msg for msg in data['errors'] if e in msg])/len(multiple_fields[f])
+                   else:
+                      err_count = len([msg for msg in data['errors'] if e in msg])
+
+                   if err_count > 0:
+                      errors.setdefault(e, 0) 
+                      errors[e] += err_count
+                    
         for d in data['data'][node]:
-          
+
             if f in multiple_fields:
               if d[multiple_fields[f][0]] == d[multiple_fields[f][1]]:
                   field_name = str(d[multiple_fields[f][0]])
@@ -109,8 +139,15 @@ def query_mtde_field(node, f, projects, auth):
             summary[field_name].setdefault(project, 0)                 
             summary[field_name][project] += 1
     
-    #plot_summary(summary, field)
-    
+        for e in errors:
+            summary.setdefault(e, {})
+            summary[e].setdefault(project, 0)
+            summary[e][project] = errors[e]
+            if 'None' in summary and project in summary['None']:
+                summary['None'][project] -= errors[e]
+                if summary['None'][project] <= 0:
+                    summary['None'].pop(project, None)
+
     return summary
 
 
@@ -134,10 +171,16 @@ def output_matrix_table(summaries, projects, file_name):
         out_file.write('<h2>MTDE Summary Matrices</h2>')               
         out_file.write('</section>\n')
 
+     
         for su in mtde_headers:
-          if su in summaries:
+          if su in summaries or su in multiple_columns:
             totals = {}
-            data = summaries[su]
+            data = {}
+            if su in multiple_columns:
+                for assay in multiple_columns[su]:
+                    data[assay] = summaries[assay]
+            else:
+                data[su] = summaries[su]
 
             out_file.write('<button class="accordion">%s</button>' % mtde_headers[su])
             out_file.write('<div class="panel">')
@@ -149,22 +192,35 @@ def output_matrix_table(summaries, projects, file_name):
             if su in multiple_fields:
                 imagename = plot_time_fields(data, su, projects)
             else:
-                imagename = plot_fields(data, su, projects)                  
+                imagename = plot_fields(data, su, projects)
 
             out_file.write('<a id="%s" href="#%s" onclick="showPlot(\'%s\',\'%s\',\'%s\')", class="showplot">View as a graph</a>' % (linkElement, su, divTable, divPlot, linkElement))
             out_file.write('<div id="%s", style="display:none">' % divPlot)
-            out_file.write('<img src="%s" alt="Fractination Time" style="width:100vw;">' % imagename)
+            out_file.write('<img src="%s" alt="%s" style="width:100vw;">' % (imagename, su))
             out_file.write('</div>')
          
             out_file.write('<div id="%s">' % divTable)
             out_file.write('<table style = "width:100%">\n')
             out_file.write('<thead>\n')
-            out_file.write('<tr>\n')               
-            out_file.write('<th>Organization</th>')
-            out_file.write('<th>Project</th>')
-            for key in data:
-                out_file.write('<th>%s</th>' % key.encode('utf-8'))
-                totals[key] = 0
+
+            if su in multiple_columns:  
+    	        out_file.write('<tr>\n')
+                out_file.write('<th rowspan="2">Organization</th>')
+                out_file.write('<th rowspan="2">Project</th>' )
+		for assay in multiple_columns[su]:
+                    num_columns = len(data[assay].keys())
+                    out_file.write('<th colspan="%d">%s</th>' % (num_columns, multiple_columns[su][assay]))
+		out_file.write('</tr>\n')
+            else: 
+                out_file.write('<tr>\n')
+                out_file.write('<th>Organization</th>')
+                out_file.write('<th>Project</th>' )
+            
+            for a in data:
+                for key in data[a]:
+                    out_file.write('<th>%s</th>' % key.encode('utf-8'))
+                    totals.setdefault(a, {})
+                    totals[a].setdefault(key, 0)
             out_file.write('</tr>\n') 
             out_file.write('</thead>\n')
 
@@ -173,20 +229,22 @@ def output_matrix_table(summaries, projects, file_name):
                 out_file.write('<tr>\n')
                 out_file.write('<th class="organization">%s</th>' % proj_name.split('_')[0])
                 out_file.write('<td>%s</td>' % proj_name)
-                for key in data:
-                    if data[key] and p in data[key]:
-                        out_file.write('<td style="min-width:150px">%s</td>' % data[key][p])
-                        totals[key] += int(data[key][p])
-                    else:
-                        out_file.write('<td>--</td>')                 
+                for a in data:
+                    for key in data[a]:
+                       if data[a][key] and p in data[a][key]:
+                          out_file.write('<td style="min-width:150px">%s</td>' % data[a][key][p])
+                          totals[a][key] += data[a][key][p]
+                       else:
+                          out_file.write('<td>--</td>')                 
                 out_file.write('</tr>\n')
 
             out_file.write('<tfoot>\n')
             out_file.write('<th class="organization">TOTALS</th>')
             out_file.write('<td>%s</td>' % len(projects))
 
-            for key in data:            
-                out_file.write('<td>%s</td>' % totals[key])
+            for a in data:
+               for key in data[a]:            
+                  out_file.write('<td>%s</td>' % totals[a][key])
             out_file.write('</tfoot>\n')
 
             out_file.write('</table>\n')
@@ -214,9 +272,10 @@ def plot_time_fields(data, su, projects):
         ylabels.append(proj_name)            
         pos += 1
         positions.append(pos)
-        for key in data:
-            if data[key] and p in data[key]:
-                if key == "None":
+        for a in data:
+          for key in data[a]:
+            if data[a][key] and p in data[a][key]:
+                if key in other_choices:
                     not_applicable.append(pos)
                     continue
                 elif '-' in key[1:-1]:
@@ -280,19 +339,22 @@ def plot_fields(data, su, projects):
         ylabels.append(proj_name)
         ypositions.append(ypos)
         xpos = 0
-        for key in data:
+        for a in data:  
+          for key in data[a]:
             xpos += 1
             pr_color = plt.get_cmap("tab20")(xpos-1)
             xlab = key.replace(' - ', '\n').replace('. ', '\n')
+            if su in multiple_columns and a in multiple_columns[su]:
+               xlab = multiple_columns[su][a] + ' - ' + xlab
             if xlab not in xlabels:
                 xlabels.append(xlab)
                 xpositions.append(xpos)
                 circles.append(Line2D([0], [0], marker="o", markersize=24, color='white', markerfacecolor=pr_color, alpha=0.5))
-            if data[key] and p in data[key]:
+            if data[a][key] and p in data[a][key]:
                 xvalues.append(xpos)
                 yvalues.append(ypos)
-                values.append(data[key][p])                 
-                plt.text(xpos, ypos, str(data[key][p]), fontsize=24, horizontalalignment='center')
+                values.append(data[a][key][p])                 
+                plt.text(xpos, ypos, str(data[a][key][p]), fontsize=24, horizontalalignment='center')
                 colors.append(pr_color)
 
     step = 10000/max(values) + 1
@@ -324,9 +386,16 @@ if __name__ == '__main__':
 
   data = {}
   for mtde in mtde_fields:   
-     print "Getting %s summary counts..." % (mtde)
-     summary = query_mtde_field(mtde_fields[mtde], mtde, projects, auth)
-     data[mtde] = summary
+     if isinstance(mtde_fields[mtde], list):
+         for m in mtde_fields[mtde]:
+            print "Getting %s values..." % m
+            summary = query_mtde_field(m, mtde, projects, auth)
+            data[m] = summary
+     else:
+         print "Getting %s values..." % (mtde)
+         summary = query_mtde_field(mtde_fields[mtde], mtde, projects, auth)
+         data[mtde] = summary
+
 
   output_matrix_table(data, projects, matrix_file_name)
   file_name = matrix_file_name
