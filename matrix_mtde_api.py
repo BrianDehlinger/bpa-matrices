@@ -188,6 +188,7 @@ def output_matrix_table(summaries, projects, file_name):
             linkElement = 'link_' + su
             divTable = 'table_' + su
             divPlot = 'plot_' + su
+            tsvTable = ''
             if su in multiple_fields:
                 imagename = plot_time_fields(data, su, projects)
             else:
@@ -215,27 +216,40 @@ def output_matrix_table(summaries, projects, file_name):
                 out_file.write('<th>Organization</th>')
                 out_file.write('<th>Project</th>' )
             
+            tsvTable += 'Organization\tProject'
+
             for a in data:
                 for key in sorted(data[a].keys()):
                     out_file.write('<th>%s</th>' % key.encode('utf-8'))
                     totals.setdefault(a, {})
                     totals[a].setdefault(key, 0)
+                    if len(data) > 1:
+                       table_header = a.encode('utf-8') + ' - ' +  key.encode('utf-8')
+                    else:
+                       table_header = key.encode('utf-8')
+                    tsvTable += '\t%s' % table_header
             out_file.write('</tr>\n') 
             out_file.write('</thead>\n')
+            tsvTable += '\n'
 
             for p in projects:
                 proj_name = p.replace('bpa-', '')
+                org_name = proj_name.split('_')[0]
                 out_file.write('<tr>\n')
-                out_file.write('<th class="organization">%s</th>' % proj_name.split('_')[0])
+                out_file.write('<th class="organization">%s</th>' % org_name)
                 out_file.write('<td>%s</td>' % proj_name)
+                tsvTable += org_name.encode('utf-8') + '\t' + proj_name.encode('utf-8')
                 for a in data:
                     for key in sorted(data[a].keys()):
                        if data[a][key] and p in data[a][key]:
                           out_file.write('<td style="min-width:150px">%s</td>' % data[a][key][p])
+                          tsvTable += '\t%s' %  data[a][key][p]
                           totals[a][key] += data[a][key][p]
                        else:
-                          out_file.write('<td>--</td>')                 
+                          out_file.write('<td>--</td>')
+                          tsvTable += '\t0'         
                 out_file.write('</tr>\n')
+                tsvTable += '\n'
 
             out_file.write('<tfoot>\n')
             out_file.write('<th class="organization">TOTALS</th>')
@@ -248,9 +262,15 @@ def output_matrix_table(summaries, projects, file_name):
 
             out_file.write('</table>\n')
             out_file.write('</div>')
+            table_file = divTable + '.tsv'
+            out_file.write('<a href="%s">Download table to TSV file</a><br>' % table_file)
             out_file.write('Last processed: %s UTC\n' % datetime.datetime.today().isoformat())
             out_file.write('</section></div>')
         
+            # Write table in TSV
+            with open(table_file, 'w') as tf:
+                 tf.write(tsvTable)
+
         out_file.write('</div></div></div>')
         out_file.write('</body></html>\n')
         out_file.write('<script src="accordion.js"></script>')
@@ -403,4 +423,6 @@ if __name__ == '__main__':
      print "Copying %s to %s" % (file_name, nginx_loc + file_name)
      shutil.copyfile(file_name, nginx_loc + file_name)
      for file in glob.glob('*.svg'):
+         shutil.copy(file, nginx_loc)
+     for file in glob.glob('*.tsv'):
          shutil.copy(file, nginx_loc)
