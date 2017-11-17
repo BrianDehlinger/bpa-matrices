@@ -147,6 +147,8 @@ def query_mtde_field(node, f, projects, auth):
                 summary['None'][project] -= errors[e]
                 if summary['None'][project] <= 0:
                     summary['None'].pop(project, None)
+                    if not summary['None']:
+                       summary.pop('None', None)
 
     return summary
 
