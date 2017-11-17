@@ -170,7 +170,6 @@ def output_matrix_table(summaries, projects, file_name):
         out_file.write('<h1>Minimum Technical Data Elements (MTDE)</h1>')  
         out_file.write('<h2>MTDE Summary Matrices</h2>')               
         out_file.write('</section>\n')
-
      
         for su in mtde_headers:
           if su in summaries or su in multiple_columns:
@@ -217,7 +216,7 @@ def output_matrix_table(summaries, projects, file_name):
                 out_file.write('<th>Project</th>' )
             
             for a in data:
-                for key in data[a]:
+                for key in sorted(data[a].keys()):
                     out_file.write('<th>%s</th>' % key.encode('utf-8'))
                     totals.setdefault(a, {})
                     totals[a].setdefault(key, 0)
@@ -230,7 +229,7 @@ def output_matrix_table(summaries, projects, file_name):
                 out_file.write('<th class="organization">%s</th>' % proj_name.split('_')[0])
                 out_file.write('<td>%s</td>' % proj_name)
                 for a in data:
-                    for key in data[a]:
+                    for key in sorted(data[a].keys()):
                        if data[a][key] and p in data[a][key]:
                           out_file.write('<td style="min-width:150px">%s</td>' % data[a][key][p])
                           totals[a][key] += data[a][key][p]
@@ -243,7 +242,7 @@ def output_matrix_table(summaries, projects, file_name):
             out_file.write('<td>%s</td>' % len(projects))
 
             for a in data:
-               for key in data[a]:            
+               for key in sorted(data[a].keys()):
                   out_file.write('<td>%s</td>' % totals[a][key])
             out_file.write('</tfoot>\n')
 
