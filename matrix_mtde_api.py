@@ -78,6 +78,12 @@ def parse_cmd_args():
     
     return args
 
+def is_number(s):
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
 
 def query_mtde_field(node, f, projects, auth):
     ''' Query summary counts for each data type '''
@@ -221,7 +227,9 @@ def output_matrix_table(summaries, projects, file_name):
             tsvTable += 'Organization\tProject'
 
             for a in data:
-                for key in sorted(data[a].keys()):
+                sorted_keys = sorted([float(x) for x in data[a].keys() if is_number(x)]) + sorted([x for x in data[a].keys() if not is_number(x)])
+                for key in sorted_keys:
+                    if isinstance(key, float): key = str(key)
                     out_file.write('<th>%s</th>' % key.encode('utf-8'))
                     totals.setdefault(a, {})
                     totals[a].setdefault(key, 0)
@@ -242,7 +250,9 @@ def output_matrix_table(summaries, projects, file_name):
                 out_file.write('<td>%s</td>' % proj_name)
                 tsvTable += org_name.encode('utf-8') + '\t' + proj_name.encode('utf-8')
                 for a in data:
-                    for key in sorted(data[a].keys()):
+                    sorted_keys = sorted([float(x) for x in data[a].keys() if is_number(x)]) + sorted([x for x in data[a].keys() if not is_number(x)])
+                    for key in sorted_keys:
+                       if isinstance(key, float): key = str(key)
                        if data[a][key] and p in data[a][key]:
                           out_file.write('<td style="min-width:150px">%s</td>' % data[a][key][p])
                           tsvTable += '\t%s' %  data[a][key][p]
@@ -258,8 +268,10 @@ def output_matrix_table(summaries, projects, file_name):
             out_file.write('<td>%s</td>' % len(projects))
 
             for a in data:
-               for key in sorted(data[a].keys()):
-                  out_file.write('<td>%s</td>' % totals[a][key])
+               sorted_keys = sorted([float(x) for x in data[a].keys() if is_number(x)]) + sorted([x for x in data[a].keys() if not is_number(x)])
+               for key in sorted_keys:
+                   if isinstance(key, float): key = str(key)
+                   out_file.write('<td>%s</td>' % totals[a][key])
             out_file.write('</tfoot>\n')
 
             out_file.write('</table>\n')
