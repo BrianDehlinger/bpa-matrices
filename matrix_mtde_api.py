@@ -8,6 +8,9 @@ import matplotlib.patches as mpatches
 style.use('ggplot')
 from utils import graphql_api
 from argparse import ArgumentParser
+import numpy as np
+import pandas as pd
+import seaborn as sns
 import shutil
 import datetime
 import glob
@@ -22,8 +25,8 @@ mtde_fields = {
     "hours_to_freezer": "aliquot",
     "storage_temperature": "aliquot",
     "analyte_isolation_method": "analyte",
-    "assay_method": ["quantification_assay", "immunoassay", "mass_cytometry_assay", "pcr_assay", "sequencing_assay"]
-    #"molecular_concentration": "quantification_assay"
+    "assay_method": ["quantification_assay", "immunoassay", "mass_cytometry_assay", "pcr_assay", "sequencing_assay"],
+    "molecular_concentration": "quantification_assay"
 }
 
 multiple_fields = {
@@ -31,7 +34,6 @@ multiple_fields = {
     "hours_to_freezer": ["hours_to_freezer_lower", "hours_to_freezer_upper"],
     "shipping_temperature": ["shipping_temperature", "shipping_temperature"],
     "storage_temperature": ["storage_temperature", "storage_temperature"],
-    "molecular_concentration": ["molecular_concentration", "molecular_concentration"]
 }
 
 multiple_columns = {
@@ -54,9 +56,11 @@ mtde_headers = {
     "storage_temperature": "Storage Temperature",
     "analyte_isolation_method": "Analyte Isolation Method",
     "quantification_assay": "Quantification Method",
-    "assay_method": "Assay Method"
-    #"molecular_concentration": "DNA Concentration"
+    "assay_method": "Assay Method",
+    "molecular_concentration": "DNA Concentration"
 }
+
+distributions = ["molecular_concentration"]
 
 other_choices = ['None', 'Unknown', 'Not Applicable']
 
@@ -199,6 +203,8 @@ def output_matrix_table(summaries, projects, file_name):
             tsvTable = ''
             if su in multiple_fields:
                 imagename = plot_time_fields(data, su, projects)
+            elif su in distributions:
+                imagename = plot_distributions(data, su, projects) 
             else:
                 imagename = plot_fields(data, su, projects)
 
@@ -405,6 +411,58 @@ def plot_fields(data, su, projects):
 
     return img
 
+def label(x, color, label):
+    ax = plt.gca()
+    ax.text(0, .2, label, fontweight="bold", fontsize=8, color=color, 
+            ha="right", va="center", transform=ax.transAxes)
+
+def plot_distributions(data, su, projects):
+
+    names = []
+
+    proj_names = []
+    values = []
+    for a in data:
+        for key in data[a]:
+            for p in data[a][key]:
+               proj_name = p.replace('bpa-', '')
+               proj_names += [proj_name] * data[a][key][p]
+               values +=[float(key)] * data[a][key][p]
+
+    for p in projects:
+        proj_name = p.replace('bpa-', '')
+        if proj_name not in proj_names:
+           proj_names.append(proj_name)
+           values.append(None)
+
+    df = pd.DataFrame(dict(x=values, g=proj_names))
+
+    # Initialize the FacetGrid object
+    sns.set(style="white", rc={"axes.facecolor": (0, 0, 0, 0)})
+    pal = sns.cubehelix_palette(len(projects), rot=-.25, light=.7)
+    g = sns.FacetGrid(df, row="g", hue="g", aspect=15, size=.5, palette=pal)
+
+    # Draw the densities in a few steps
+    #g.map(sns.distplot, "x", bins=50, kde=True)
+    g.map(sns.kdeplot, "x", clip_on=False, shade=True, alpha=1, lw=1.5, bw=.2)
+    g.map(sns.kdeplot, "x", clip_on=False, color="w", lw=2, bw=.2)
+    g.map(plt.axhline, y=0, lw=2, clip_on=False)
+    g.map(label, "x")
+
+    # Set the subplots to overlap
+    g.fig.subplots_adjust(hspace=-.25)
+
+    # Remove axes details that don't play will with overlap
+    g.set_titles("")
+    g.set(xlabel="")
+    g.set(yticks=[])
+    g.despine(bottom=True, left=True)
+
+    img = 'mtde_%s.svg' % (su)
+    plt.savefig(img, bbox_inches='tight')
+    plt.show()
+
+    return img
 
 if __name__ == '__main__':
 
