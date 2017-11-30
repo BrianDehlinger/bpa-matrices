@@ -30,8 +30,8 @@ mtde_fields = {
 }
 
 multiple_fields = {
-    "hours_to_fractionation": ["hours_to_fractionation_lower", "hours_to_fractionation_upper"],     
-    "hours_to_freezer": ["hours_to_freezer_lower", "hours_to_freezer_upper"],
+    "hours_to_fractionation": ["hours_to_fractionation_upper", "hours_to_fractionation_upper"],     
+    "hours_to_freezer": ["hours_to_freezer_upper", "hours_to_freezer_upper"],
     "shipping_temperature": ["shipping_temperature", "shipping_temperature"],
     "storage_temperature": ["storage_temperature", "storage_temperature"],
 }
@@ -50,9 +50,9 @@ mtde_headers = {
     "blood_tube_type": "Tube Type",
     "shipping_temperature": "Shipping Temperature",    
     "composition": "Composition",
-    "hours_to_fractionation": "Time to Fractionation",    
+    "hours_to_fractionation": "Maximum Time to Fractionation",    
     "clinical_or_contrived": "Sample Type",    
-    "hours_to_freezer": "Time to Freezer",
+    "hours_to_freezer": "Maximum Time to Freezer",
     "storage_temperature": "Storage Temperature",
     "analyte_isolation_method": "Analyte Isolation Method",
     "quantification_assay": "Quantification Method",
