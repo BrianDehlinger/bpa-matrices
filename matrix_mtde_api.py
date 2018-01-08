@@ -122,7 +122,7 @@ def query_mtde_field(node, f, projects, auth):
                for e in other_choices:
                    err_count = 0
 
-                   if f in multiple_fields:
+                   if f in multiple_fields and multiple_fields[f][0] != multiple_fields[f][1]:
    	              err_count = len([msg for msg in data['errors'] if e in msg])/len(multiple_fields[f])
                    else:
                       err_count = len([msg for msg in data['errors'] if e in msg])
@@ -424,10 +424,11 @@ def plot_distributions(data, su, projects):
     values = []
     for a in data:
         for key in data[a]:
-            for p in data[a][key]:
-               proj_name = p.replace('bpa-', '')
-               proj_names += [proj_name] * data[a][key][p]
-               values +=[float(key)] * data[a][key][p]
+            if key != "None":
+               for p in data[a][key]:
+                  proj_name = p.replace('bpa-', '')
+                  proj_names += [proj_name] * data[a][key][p]
+                  values +=[float(key)] * data[a][key][p]
 
     for p in projects:
         proj_name = p.replace('bpa-', '')
