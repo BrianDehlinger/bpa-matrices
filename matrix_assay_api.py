@@ -50,7 +50,7 @@ def parse_cmd_args():
                         action='store_true')
     parser.add_argument('--keys_file',
                         help='File for api authorization',
-                        default='/home/ubuntu/.secrets')
+                        default='/home/ubuntu/credentials.json')
     parser.add_argument('--output',
                         help='HTML output file',
                         default='matrix_assays.html')

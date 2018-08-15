@@ -60,22 +60,27 @@ mtde_headers = {
     "molecular_concentration": "DNA Concentration"
 }
 
+concentration_ranges = [0.2, 0.5, 1, 2, 10, 20, 100, 100, 'None']
+
 distributions = ["molecular_concentration"]
 
 other_choices = ['None', 'Unknown', 'Not Applicable']
 
 step = 10000
 
-not_validated_projects = ["internal-test"]
+not_validated_projects = ["internal-test", "bpa-MSKCC_P0002_T1", "bpa-MSKCC_P0003_T1", "bpa-MSKCC_P0004_T1", "bpa-Novartis_Contrived2_T1", "bpa-PersonalGenome_Beta1", "training-JFDI"]
 
 def parse_cmd_args():
     parser = ArgumentParser()
     parser.add_argument('--copy_file_to_server',
                         help='copies file to object store',
                         action='store_true')
+    parser.add_argument('--server_url',
+                        help='server URL to copy files',
+                        default='/usr/share/nginx/html/')
     parser.add_argument('--keys_file',
                         help='File for api authorization',
-                        default='/home/ubuntu/.secrets')
+                        default='/home/ubuntu/credentials.json')
 
     parser.set_defaults(print_list=False)
     args = parser.parse_args()
@@ -173,14 +178,14 @@ def output_matrix_table(summaries, projects, file_name):
         out_file.write('<title>BloodPAC - MTDE Summary</title>\n')
         out_file.write('<link rel="shortcut icon" href="favicon.png" type="image/x-icon"/>\n')
         out_file.write('</head>\n')
+
         out_file.write('<body>\n')
         out_file.write('<div class="master-content">\n')
         out_file.write('<div class="container">\n')
         out_file.write('<div class="grid">\n')
         out_file.write('<section class="grid__col--60 grid__col--push10" role="header" id="header">\n')
         out_file.write('<h1><img src="bpa-logo.png" height="64"></h1>\n')
-        out_file.write('<h1>Minimum Technical Data Elements (MTDE)</h1>')  
-        out_file.write('<h2>MTDE Summary Matrices</h2>')               
+        out_file.write('<h1>MTDE Summary Matrices</h1>')  
         out_file.write('</section>\n')
      
         for su in mtde_headers:
@@ -233,16 +238,33 @@ def output_matrix_table(summaries, projects, file_name):
             tsvTable += 'Organization\tProject'
 
             for a in data:
-                sorted_keys = sorted([float(x) for x in data[a].keys() if is_number(x)]) + sorted([x for x in data[a].keys() if not is_number(x)])
-                for key in sorted_keys:
+                 # Special range headers for concentration
+                 if su == 'molecular_concentration':
+                     for idx in range(len(concentration_ranges)):
+                         if idx == 0:
+                            concen_header = "<" + str(concentration_ranges[idx]).encode('utf-8')
+                         elif idx == (len(concentration_ranges)-1):
+                            concen_header = str(concentration_ranges[idx]).encode('utf-8')
+                         elif idx == (len(concentration_ranges)-2):
+                            concen_header = ">=" + str(concentration_ranges[idx]).encode('utf-8')
+                         else:
+                            concen_header = '[' + str(concentration_ranges[idx-1]).encode('utf-8') + '-' +  str(concentration_ranges[idx]).encode('utf-8') + '['
+                         out_file.write('<th>%s</th>' % concen_header)
+                         totals.setdefault(a, {})
+                         totals[a].setdefault(concen_header, 0)
+                 # Other headers
+                 sorted_keys = sorted([float(x) for x in data[a].keys() if is_number(x)]) + sorted([x for x in data[a].keys() if not is_number(x)])
+                 for key in sorted_keys:
                     if isinstance(key, float): key = str(key)
-                    out_file.write('<th>%s</th>' % key.encode('utf-8'))
-                    totals.setdefault(a, {})
-                    totals[a].setdefault(key, 0)
+                    if su != 'molecular_concentration':
+                        out_file.write('<th>%s</th>' % key.encode('utf-8'))
+                        totals.setdefault(a, {})
+                        totals[a].setdefault(key, 0)
+                    # Write headers in TSV
                     if len(data) > 1:
-                       table_header = a.encode('utf-8') + ' - ' +  key.encode('utf-8')
+                       	table_header = a.encode('utf-8') + ' - ' +  key.encode('utf-8')
                     else:
-                       table_header = key.encode('utf-8')
+                       	table_header = key.encode('utf-8')
                     tsvTable += '\t%s' % table_header
             out_file.write('</tr>\n') 
             out_file.write('</thead>\n')
@@ -257,15 +279,51 @@ def output_matrix_table(summaries, projects, file_name):
                 tsvTable += org_name.encode('utf-8') + '\t' + proj_name.encode('utf-8')
                 for a in data:
                     sorted_keys = sorted([float(x) for x in data[a].keys() if is_number(x)]) + sorted([x for x in data[a].keys() if not is_number(x)])
+                    # Special range headers for concentration
+                    if su == 'molecular_concentration':
+                       for idx in range(len(concentration_ranges)):
+                          subtotal = 0                
+                          if idx == 0:
+                               concen_header = "<" + str(concentration_ranges[idx]).encode('utf-8')
+                          elif idx == (len(concentration_ranges)-1):
+                               concen_header = str(concentration_ranges[idx]).encode('utf-8')
+                          elif idx == (len(concentration_ranges)-2):
+                               concen_header = ">=" + str(concentration_ranges[idx]).encode('utf-8')
+                          else:
+                               concen_header = '[' + str(concentration_ranges[idx-1]).encode('utf-8') + '-' +  str(concentration_ranges[idx]).encode('utf-8') + '['
+
+                          for key in sorted_keys:
+                              if isinstance(key, float): key = str(key)
+                              if data[a][key] and p in data[a][key]:
+                                 if concen_header == 'None':
+                                    if concen_header == key:                                 
+                                         subtotal += int(data[a][key][p])
+                                 elif key != 'None':
+                                    if float(key) < concentration_ranges[idx]:
+                                         if idx == 0:
+                                            subtotal += int(data[a][key][p])
+                                         elif float(key) >= concentration_ranges[idx-1]:
+                                            subtotal += int(data[a][key][p])
+                                    elif float(key) > concentration_ranges[idx] and '>' in concen_header:
+                                         subtotal += int(data[a][key][p])
+
+                          if subtotal == 0:            
+                              out_file.write('<td style="min-width:150px">--</td>')
+                          else:
+                              out_file.write('<td style="min-width:150px">%s</td>' % subtotal)
+                          totals[a][concen_header] += subtotal
+                    # Special range headers for concentration                    
                     for key in sorted_keys:
-                       if isinstance(key, float): key = str(key)
-                       if data[a][key] and p in data[a][key]:
-                          out_file.write('<td style="min-width:150px">%s</td>' % data[a][key][p])
-                          tsvTable += '\t%s' %  data[a][key][p]
-                          totals[a][key] += data[a][key][p]
-                       else:
-                          out_file.write('<td>--</td>')
-                          tsvTable += '\t0'         
+                          if isinstance(key, float): key = str(key)
+                          if data[a][key] and p in data[a][key]:
+                              if su != 'molecular_concentration':
+                                  out_file.write('<td style="min-width:150px">%s</td>' % data[a][key][p])
+                                  totals[a][key] += data[a][key][p]                            
+                              tsvTable += '\t%s' %  data[a][key][p]
+                          else:
+                              if su != 'molecular_concentration':
+                                  out_file.write('<td>--</td>')
+                              tsvTable += '\t0'         
                 out_file.write('</tr>\n')
                 tsvTable += '\n'
 
@@ -273,18 +331,32 @@ def output_matrix_table(summaries, projects, file_name):
             out_file.write('<th class="organization">TOTALS</th>')
             out_file.write('<td>%s</td>' % len(projects))
 
+            # Write totals
             for a in data:
-               sorted_keys = sorted([float(x) for x in data[a].keys() if is_number(x)]) + sorted([x for x in data[a].keys() if not is_number(x)])
-               for key in sorted_keys:
-                   if isinstance(key, float): key = str(key)
-                   out_file.write('<td>%s</td>' % totals[a][key])
+               if su == 'molecular_concentration':
+                   for idx in range(len(concentration_ranges)):
+                       if idx == 0:
+                            concen_header = "<" + str(concentration_ranges[idx]).encode('utf-8')
+                       elif idx == (len(concentration_ranges)-1):
+                            concen_header = str(concentration_ranges[idx]).encode('utf-8')
+                       elif idx == (len(concentration_ranges)-2):
+                            concen_header = ">=" + str(concentration_ranges[idx]).encode('utf-8')
+                       else:
+                            concen_header = '[' + str(concentration_ranges[idx-1]).encode('utf-8') + '-' +  str(concentration_ranges[idx]).encode('utf-8') + '['
+                       out_file.write('<td>%s</td>' % totals[a][concen_header])
+                       
+               else:  
+                  sorted_keys = sorted([float(x) for x in data[a].keys() if is_number(x)]) + sorted([x for x in data[a].keys() if not is_number(x)])
+                  for key in sorted_keys:
+                      if isinstance(key, float): key = str(key)
+                      out_file.write('<td>%s</td>' % totals[a][key])
             out_file.write('</tfoot>\n')
 
             out_file.write('</table>\n')
             out_file.write('</div>')
             table_file = divTable + '.tsv'
             out_file.write('<a href="%s">Download table to TSV file</a><br>' % table_file)
-            out_file.write('Last processed: %s UTC\n' % datetime.datetime.today().isoformat())
+            #out_file.write('Last processed: %s UTC\n' % datetime.datetime.today().isoformat())
             out_file.write('</section></div>')
         
             # Write table in TSV
@@ -426,17 +498,19 @@ def plot_distributions(data, su, projects):
         for key in data[a]:
             if key != "None":
                for p in data[a][key]:
-                  proj_name = p.replace('bpa-', '')
-                  proj_names += [proj_name] * data[a][key][p]
-                  values +=[float(key)] * data[a][key][p]
+                 if p != 'bpa-Novartis_Contrived1_T1':
+                     proj_name = p.replace('bpa-', '')
+                     proj_names += [proj_name] * data[a][key][p]
+                     values +=[float(key)] * data[a][key][p]
 
-    for p in projects:
-        proj_name = p.replace('bpa-', '')
-        if proj_name not in proj_names:
-           proj_names.append(proj_name)
-           values.append(None)
+    #for p in projects:
+    #    proj_name = p.replace('bpa-', '')
+    #    if proj_name not in proj_names:
+    #       proj_names.append(proj_name)
+    #       values.append(None)
 
     df = pd.DataFrame(dict(x=values, g=proj_names))
+    df = df.sort_values(by=['g'])
 
     # Initialize the FacetGrid object
     sns.set(style="white", rc={"axes.facecolor": (0, 0, 0, 0)})
@@ -451,7 +525,7 @@ def plot_distributions(data, su, projects):
     g.map(label, "x")
 
     # Set the subplots to overlap
-    g.fig.subplots_adjust(hspace=-.25)
+    g.fig.subplots_adjust(hspace=-.4)
 
     # Remove axes details that don't play will with overlap
     g.set_titles("")
@@ -473,8 +547,8 @@ if __name__ == '__main__':
 
   projects = graphql_api.get_projects(auth, not_validated_projects)
 
-  matrix_file_name = 'matrix_mtde.html'     
-  nginx_loc = '/usr/share/nginx/html/'
+  matrix_file_name = 'matrix_mtde.html'
+  nginx_loc = args.server_url
 
   data = {}
   for mtde in mtde_fields:   

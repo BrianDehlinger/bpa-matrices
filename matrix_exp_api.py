@@ -52,7 +52,7 @@ special_style = {
 
 not_validated_projects = ["internal-test"]
 
-step = 5
+step = 3
 
 def parse_cmd_args():
     ''' Read arguments '''
@@ -63,7 +63,7 @@ def parse_cmd_args():
                         action='store_true')
     parser.add_argument('--keys_file',
                         help='File for api authorization',
-                        default='/home/ubuntu/.secrets')
+                        default='/home/ubuntu/credentials.json')
     parser.add_argument('--output',
                         help='HTML output file',
                         default='matrix3.html')

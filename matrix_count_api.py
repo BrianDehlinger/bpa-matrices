@@ -134,7 +134,7 @@ def parse_cmd_args():
                         action='store_true')
     parser.add_argument('--keys_file',
                         help='File for api authorization',
-                        default='/home/ubuntu/.secrets')
+                        default='/home/ubuntu/credentials.json')
 
     parser.set_defaults(print_list=False)
     args = parser.parse_args()
